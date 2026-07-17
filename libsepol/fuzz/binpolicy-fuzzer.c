@@ -28,7 +28,9 @@ static int write_binary_policy(policydb_t *p, FILE *outfp)
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
-	policydb_t policydb = {}, out = {};
+	policydb_t policydb = {}, out = {}, modpol = {};
+	policydb_t *mods[] = { &modpol };
+	int nmods = 0;
 	sidtab_t sidtab = {};
 	struct policy_file pf;
 	FILE *devnull = NULL;
@@ -80,7 +82,26 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 			abort();
 
 		if (policydb.policy_type == POLICY_BASE) {
-			if (link_modules(NULL, &policydb, NULL, 0, VERBOSE))
+			/*
+			 * If the input carries a second concatenated policydb after
+			 * the base and it is a POLICY_MOD, feed it to link_modules()
+			 * so that link.c's per-module remapping and copy paths are
+			 * exercised (with mods=NULL that whole subtree is dead).
+			 * Trailing junk that fails to read/validate is ignored.
+			 */
+			if (pf.len > 0 && policydb_init(&modpol) == 0) {
+				if (policydb_read(&modpol, &pf, VERBOSE) == 0 &&
+				    modpol.policy_type == POLICY_MOD &&
+				    modpol.mls == policydb.mls) {
+					nmods = 1;
+				} else {
+					policydb_destroy(&modpol);
+					memset(&modpol, 0, sizeof(modpol));
+				}
+			}
+
+			if (link_modules(NULL, &policydb, nmods ? mods : NULL,
+					 nmods, VERBOSE))
 				goto exit;
 
 			if (policydb_init(&out))
@@ -113,6 +134,7 @@ exit:
 		fclose(devnull);
 
 	policydb_destroy(&out);
+	policydb_destroy(&modpol);
 	policydb_destroy(&policydb);
 	sepol_sidtab_destroy(&sidtab);
 
