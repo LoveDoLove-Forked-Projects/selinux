@@ -1521,6 +1521,8 @@ static int validate_filename_trans(hashtab_key_t k, hashtab_datum_t d,
 		goto bad;
 	if (validate_value(ftk->tclass, &flavors[SYM_CLASSES]))
 		goto bad;
+	if (!ftk->name || !ftk->name[0])
+		goto bad;
 	if (!ftd)
 		goto bad;
 	for (; ftd; ftd = ftd->next) {
@@ -1879,6 +1881,8 @@ validate_filename_trans_rules(sepol_handle_t *handle,
 				   &flavors[SYM_CLASSES]))
 			goto bad;
 		if (validate_simpletype(filename_trans->otype, p, flavors))
+			goto bad;
+		if (!filename_trans->name || !filename_trans->name[0])
 			goto bad;
 
 		/* currently only the RULE_SELF flag can be set */
